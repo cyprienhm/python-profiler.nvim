@@ -1,1 +1,1 @@
-# cprofile-python.nvim
+# python-profiler.nvim
