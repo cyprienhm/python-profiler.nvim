@@ -1,61 +1,27 @@
 local M = {}
 M.last_profile = ""
 
-PYTHON_CODE = [[
-import json
-from collections import defaultdict
-from pathlib import Path
-
-with open("prof.json") as f:
-    data = json.load(f)
-
-times = defaultdict(float)
-
-
-def walk(frame):
-    if frame.get("is_application_code"):
-        key = (frame["file_path"], frame["line_no"])
-        times[key] += frame["time"]
-    for child in frame.get("children", []):
-        walk(child)
-
-
-walk(data["root_frame"])
-
-
-def to_lua_table(d):
-    out = ["return {"]
-    files = {}
-    for (file, line), t in d.items():
-        short = file.split("/")[-1]
-        files.setdefault(short, {})[line] = t
-    for file, lines in files.items():
-        out.append(f'  ["{file}"] = {{')
-        for line, t in sorted(lines.items()):
-            out.append(f"    [{line}] = {t},")
-        out.append("  },")
-    out.append("}")
-    return "\n".join(out)
-
-
-print(to_lua_table(times))
-  ]]
-
 function M.profile_file()
 	vim.notify("python-profiler: starting profiling...")
 	local filepath = vim.api.nvim_buf_get_name(0)
-	vim.system({ "pyinstrument", "-o", "prof.json", filepath }):wait()
-	local output = vim.system({ "python", "-c", PYTHON_CODE }):wait().stdout
-	if not output then
-		vim.notify("Profiling failed")
-		return
+	vim.system({ "pyinstrument", "-r", "json", "-o", "/tmp/python-profile.json", filepath }):wait()
+	local data = vim.fn.json_decode(vim.fn.readfile("/tmp/python-profile.json", "b"))
+	local times = {}
+
+	local function walk(frame)
+		if frame.is_application_code then
+			local file = frame.file_path:match("[^/]+$") -- basename
+			times[file] = times[file] or {}
+			times[file][frame.line_no] = (times[file][frame.line_no] or 0) + frame.time
+		end
+		for _, child in ipairs(frame.children or {}) do
+			walk(child)
+		end
 	end
-	local f, err = load(output)
-	if not f then
-		vim.notify("Failed to load Lua table: " .. err)
-		return
-	end
-	M.last_profile = f()
+
+	walk(data.root_frame)
+	print(vim.inspect(times))
+	M.last_profile = times
 	vim.notify("python-profiler: profiling done. Run PythonProfileAnnotate.")
 end
 
