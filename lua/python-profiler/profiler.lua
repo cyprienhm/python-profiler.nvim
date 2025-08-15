@@ -1,6 +1,7 @@
 local M = {}
 M.last_profile = ""
 M.ns = M.ns or vim.api.nvim_create_namespace("profiler")
+M.is_annotating = false
 
 function M.profile_file()
 	vim.notify("python-profiler: starting profiling...")
@@ -36,13 +37,15 @@ function M.profile_file()
 			walk(data.root_frame)
 
 			M.last_profile = times
-			vim.notify("python-profiler: profiling done. Run PythonProfileAnnotate.")
+			vim.notify("python-profiler: profiling done. Annotating.")
+			M.annotate_lines()
 		end)
 	end)
 end
 
 function M.annotate_lines()
 	vim.notify("python-profiler: annotating...")
+	M.is_annotating = true
 	if not M.last_profile then
 		return
 	end
@@ -52,14 +55,18 @@ function M.annotate_lines()
 		return
 	end
 	local bufnr = vim.api.nvim_get_current_buf()
-	vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
-
+	M.clear_annotations()
 	for line, t in pairs(lines) do
 		vim.api.nvim_buf_set_extmark(bufnr, M.ns, line - 1, 0, {
 			virt_text = { { string.format("%.3fs", t), "ErrorMsg" } },
 			virt_text_pos = "eol",
 		})
 	end
+end
+
+function M.clear_annotations()
+	local bufnr = vim.api.nvim_get_current_buf()
+	vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
 end
 
 return M
