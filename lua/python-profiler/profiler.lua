@@ -18,9 +18,15 @@ function M.create_gradient_highlights()
 		vim.api.nvim_set_hl(0, "ProfilerHeat" .. i, { fg = color })
 	end
 end
+
 local function get_highlight_group(ratio)
 	local step = math.min(9, math.floor(ratio * 10))
 	return "ProfilerHeat" .. step
+end
+
+local function make_bar(ratio, width)
+	local filled = math.floor(ratio * width)
+	return string.rep("█", filled) .. string.rep("░", width - filled)
 end
 
 function M.profile_file()
@@ -98,6 +104,7 @@ function M.annotate_lines(filepath)
 		local highlight_group = get_highlight_group(ratio)
 		vim.api.nvim_buf_set_extmark(bufnr, M.ns, line - 1, 0, {
 			virt_text = {
+				{ make_bar(ratio, 10) .. " ", highlight_group },
 				{ string.format("%.3fs (%.1f%%) -- %d calls", t.time, ratio * 100, t.count), highlight_group },
 			},
 			virt_text_pos = "eol",
