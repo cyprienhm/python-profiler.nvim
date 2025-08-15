@@ -4,22 +4,25 @@ local M = {}
 
 function M.setup()
 	vim.api.nvim_create_user_command("PythonProfileStart", function()
+		profiler.annotate_on_open = true
 		profiler.profile_file()
 	end, {})
 	vim.api.nvim_create_user_command("PythonProfileAnnotate", function()
-		profiler.is_annotating = true
-		profiler.annotate_lines()
+		profiler.annotate_on_open = true
+		profiler.annotate_all_open_buffers()
 	end, {})
 	vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
 		pattern = "*.py",
 		callback = function()
-			if profiler.is_annotating then
-				profiler.annotate_lines()
+			if profiler.annotate_on_open then
+				vim.schedule(function()
+					profiler.annotate_lines(vim.api.nvim_buf_get_name(0))
+				end)
 			end
 		end,
 	})
 	vim.api.nvim_create_user_command("PythonProfileClear", function()
-		profiler.is_annotating = false
+		profiler.annotate_on_open = false
 		profiler.clear_annotations()
 		vim.notify("python-profiler: cleared annotations")
 	end, {})
