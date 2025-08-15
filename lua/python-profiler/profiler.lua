@@ -1,5 +1,6 @@
 local M = {}
 M.last_profile = ""
+M.ns = M.ns or vim.api.nvim_create_namespace("profiler")
 
 function M.profile_file()
 	vim.notify("python-profiler: starting profiling...")
@@ -50,10 +51,11 @@ function M.annotate_lines()
 	if not lines then
 		return
 	end
-	local ns = vim.api.nvim_create_namespace("profiler")
 	local bufnr = vim.api.nvim_get_current_buf()
+	vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
+
 	for line, t in pairs(lines) do
-		vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+		vim.api.nvim_buf_set_extmark(bufnr, M.ns, line - 1, 0, {
 			virt_text = { { string.format("%.3fs", t), "ErrorMsg" } },
 			virt_text_pos = "eol",
 		})
