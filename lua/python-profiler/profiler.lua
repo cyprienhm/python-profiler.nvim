@@ -4,25 +4,40 @@ M.last_profile = ""
 function M.profile_file()
 	vim.notify("python-profiler: starting profiling...")
 	local filepath = vim.api.nvim_buf_get_name(0)
-	vim.system({ "pyinstrument", "-r", "json", "-o", "/tmp/python-profile.json", filepath }):wait()
-	local data = vim.fn.json_decode(vim.fn.readfile("/tmp/python-profile.json", "b"))
-	local times = {}
 
-	local function walk(frame)
-		if frame.is_application_code then
-			local file = frame.file_path:match("[^/]+$") -- basename
-			times[file] = times[file] or {}
-			times[file][frame.line_no] = (times[file][frame.line_no] or 0) + frame.time
-		end
-		for _, child in ipairs(frame.children or {}) do
-			walk(child)
-		end
-	end
+	vim.system({ "pyinstrument", "-r", "json", "-o", "/tmp/python-profile.json", filepath }, {
+		stdout_buffered = true,
+		stderr_buffered = true,
+	}, function(res)
+		vim.schedule(function()
+			if res.code ~= 0 then
+				vim.notify("Profiling failed: " .. (res.stderr or ""))
+				return
+			end
 
-	walk(data.root_frame)
-	print(vim.inspect(times))
-	M.last_profile = times
-	vim.notify("python-profiler: profiling done. Run PythonProfileAnnotate.")
+			local data = vim.fn.json_decode(vim.fn.readfile("/tmp/python-profile.json", "b"))
+			if not data then
+				vim.notify("Failed to parse profiling JSON")
+				return
+			end
+
+			local times = {}
+			local function walk(frame)
+				if frame.is_application_code then
+					local file = frame.file_path:match("[^/]+$")
+					times[file] = times[file] or {}
+					times[file][frame.line_no] = (times[file][frame.line_no] or 0) + frame.time
+				end
+				for _, child in ipairs(frame.children or {}) do
+					walk(child)
+				end
+			end
+			walk(data.root_frame)
+
+			M.last_profile = times
+			vim.notify("python-profiler: profiling done. Run PythonProfileAnnotate.")
+		end)
+	end)
 end
 
 function M.annotate_lines()
