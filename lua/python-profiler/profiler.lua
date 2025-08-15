@@ -51,7 +51,11 @@ function M.profile_file()
 					file = normalize_path(file)
 					M.profiles[file] = M.profiles[file] or {}
 					local t = M.profiles[file]
-					t[frame.line_no] = (t[frame.line_no] or 0) + frame.time
+					if not t[frame.line_no] then
+						t[frame.line_no] = { time = 0, count = 0 }
+					end
+					t[frame.line_no].time = t[frame.line_no].time + frame.time
+					t[frame.line_no].count = t[frame.line_no].count + 1
 				end
 				for _, child in ipairs(frame.children or {}) do
 					walk(child)
@@ -86,14 +90,16 @@ function M.annotate_lines(filepath)
 
 	local max_time = 0
 	for _, t in pairs(lines) do
-		max_time = max_time + t
+		max_time = max_time + t.time
 	end
 
 	for line, t in pairs(lines) do
-		local ratio = t / max_time
+		local ratio = t.time / max_time
 		local highlight_group = get_highlight_group(ratio)
 		vim.api.nvim_buf_set_extmark(bufnr, M.ns, line - 1, 0, {
-			virt_text = { { string.format("%.3fs (%.1f%%)", t, ratio * 100), highlight_group } },
+			virt_text = {
+				{ string.format("%.3fs (%.1f%%) -- %d calls", t.time, ratio * 100, t.count), highlight_group },
+			},
 			virt_text_pos = "eol",
 		})
 	end
