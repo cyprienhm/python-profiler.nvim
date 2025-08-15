@@ -7,6 +7,22 @@ local function normalize_path(path)
 	return vim.fn.fnamemodify(path, ":p") -- absolute path
 end
 
+function M.create_gradient_highlights()
+	for i = 0, 9 do
+		local ratio = i / 9
+		local r = math.floor(ratio * 255)
+		local g = math.floor((1 - ratio) * 128)
+		local b = math.floor((1 - ratio) * 255)
+
+		local color = string.format("#%02x%02x%02x", r, g, b)
+		vim.api.nvim_set_hl(0, "ProfilerHeat" .. i, { fg = color })
+	end
+end
+local function get_highlight_group(ratio)
+	local step = math.min(9, math.floor(ratio * 10))
+	return "ProfilerHeat" .. step
+end
+
 function M.profile_file()
 	local filepath = vim.api.nvim_buf_get_name(0)
 	filepath = normalize_path(filepath)
@@ -68,9 +84,16 @@ function M.annotate_lines(filepath)
 	local bufnr = vim.fn.bufnr(filepath, true)
 	vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
 
+	local max_time = 0
+	for _, t in pairs(lines) do
+		max_time = max_time + t
+	end
+
 	for line, t in pairs(lines) do
+		local ratio = t / max_time
+		local highlight_group = get_highlight_group(ratio)
 		vim.api.nvim_buf_set_extmark(bufnr, M.ns, line - 1, 0, {
-			virt_text = { { string.format("%.3fs", t), "ErrorMsg" } },
+			virt_text = { { string.format("%.3fs (%.1f%%)", t, ratio * 100), highlight_group } },
 			virt_text_pos = "eol",
 		})
 	end

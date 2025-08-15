@@ -3,6 +3,7 @@ local profiler = require("python-profiler.profiler")
 local M = {}
 
 function M.setup()
+	profiler.create_gradient_highlights()
 	vim.api.nvim_create_user_command("PythonProfileStart", function()
 		profiler.annotate_on_open = true
 		profiler.profile_file()
