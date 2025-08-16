@@ -1,14 +1,11 @@
 local M = {}
-
-local function normalize_path(path)
-	return vim.fn.fnamemodify(path, ":p")
-end
+local files = require("python-profiler.utils.files")
+local paths = require("python-profiler.utils.paths")
 
 function M.parse_json_output(json_path)
-	local lines = vim.fn.readfile(json_path, "b")
-	local ok, data = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
-	if not ok or not data then
-		return nil, "Failed to parse profiling JSON"
+	local data, err = files.read_json_file(json_path)
+	if not data then
+		return nil, err
 	end
 
 	local profiles = {}
@@ -16,7 +13,7 @@ function M.parse_json_output(json_path)
 
 	local function walk(frame)
 		if frame.is_application_code then
-			local file = normalize_path(frame.file_path)
+			local file = paths.normalize_path(frame.file_path)
 			profiles[file] = profiles[file] or {}
 			local t = profiles[file]
 			if not t[frame.line_no] then
@@ -39,4 +36,3 @@ function M.parse_json_output(json_path)
 end
 
 return M
-

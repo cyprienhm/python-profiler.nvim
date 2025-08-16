@@ -1,8 +1,5 @@
 local M = {}
-
-local function normalize_path(path)
-	return vim.fn.fnamemodify(path, ":p")
-end
+local paths = require("python-profiler.utils.paths")
 
 function M.parse_output(output)
 	local profiles = {}
@@ -12,7 +9,7 @@ function M.parse_output(output)
 	for line in output:gmatch("[^\r\n]+") do
 		local file_match = line:match("^File:%s+(.+)")
 		if file_match then
-			current_file = normalize_path(file_match)
+			current_file = paths.normalize_path(file_match)
 			profiles[current_file] = {}
 		elseif current_file then
 			local line_no, hits, time_us = line:match("^%s*(%d+)%s+(%d+)%s+([%d%.]+)%s+[%d%.]+%s+[%d%.]+")
@@ -35,4 +32,3 @@ function M.parse_output(output)
 end
 
 return M
-

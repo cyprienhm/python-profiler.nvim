@@ -1,5 +1,7 @@
 local pyinstrument_parser = require("python-profiler.parsers.pyinstrument")
 local kernprof_parser = require("python-profiler.parsers.kernprof")
+local files = require("python-profiler.utils.files")
+local paths = require("python-profiler.utils.paths")
 
 local M = {}
 M.profiles = { pyinstrument = {}, kernprof = {} }
@@ -9,10 +11,6 @@ M.ns = {
 	kernprof = vim.api.nvim_create_namespace("profiler_kernprof"),
 }
 M.annotate_on_open = false
-
-local function normalize_path(path)
-	return vim.fn.fnamemodify(path, ":p") -- absolute path
-end
 
 function M.create_gradient_highlights()
 	for i = 0, 9 do
@@ -38,10 +36,10 @@ end
 
 function M.profile_file()
 	local filepath = vim.api.nvim_buf_get_name(0)
-	filepath = normalize_path(filepath)
+	filepath = paths.normalize_path(filepath)
 	vim.notify("python-profiler: profiling " .. filepath .. " ...")
 
-	vim.system({ "pyinstrument", "-r", "json", "-o", "/tmp/python-profile.json", filepath }, {
+	vim.system({ "pyinstrument", "-r", "json", "-o", paths.get_temp_json_path(), filepath }, {
 		stdout_buffered = true,
 		stderr_buffered = true,
 	}, function(res)
@@ -51,7 +49,7 @@ function M.profile_file()
 				return
 			end
 
-			local result, err = pyinstrument_parser.parse_json_output("/tmp/python-profile.json")
+			local result, err = pyinstrument_parser.parse_json_output(paths.get_temp_json_path())
 			if not result then
 				vim.notify("python-profiler: " .. err)
 				return
@@ -76,7 +74,7 @@ end
 
 function M.annotate_lines(filepath, tool)
 	filepath = filepath or vim.api.nvim_buf_get_name(0)
-	filepath = normalize_path(filepath)
+	filepath = paths.normalize_path(filepath)
 	local lines = M.profiles[tool][filepath]
 	if not lines then
 		return
@@ -100,7 +98,7 @@ end
 
 function M.clear_annotations(tool)
 	for filepath, _ in pairs(M.profiles[tool]) do
-		filepath = normalize_path(filepath)
+		filepath = paths.normalize_path(filepath)
 		local bufnr = vim.fn.bufnr(filepath, true)
 		if vim.api.nvim_buf_is_loaded(bufnr) then
 			vim.api.nvim_buf_clear_namespace(bufnr, M.ns[tool], 0, -1)
@@ -108,28 +106,17 @@ function M.clear_annotations(tool)
 	end
 end
 
-function M.discover_python_files()
-	local handle =
-		io.popen("find . -name '*.py' -not -path '*/.*' -not -path '*/__pycache__/*' | tr '\n' ',' | sed 's/,$//'")
-	if handle == nil then
-		return ""
-	end
-	local result = handle:read("*a"):gsub("%s+$", "")
-	handle:close()
-	return result
-end
-
 function M.line_profile_file()
 	local filepath = vim.api.nvim_buf_get_name(0)
-	filepath = normalize_path(filepath)
-	local modules = M.discover_python_files()
+	filepath = paths.normalize_path(filepath)
+	local modules = files.discover_python_files()
 
 	if modules == "" then
 		vim.notify("python-profiler: no Python modules found to profile")
 		return
 	end
 
-	local lprof_file = filepath .. ".lprof"
+	local lprof_file = paths.get_lprof_path(filepath)
 	vim.notify("python-profiler: line profiling " .. filepath .. " with modules: " .. modules)
 
 	vim.system({ "kernprof", "-l", "-p", modules, filepath }, {
