@@ -1,5 +1,6 @@
 local M = {}
 M.profiles = {}
+M.total_time = 0
 M.ns = vim.api.nvim_create_namespace("profiler")
 M.annotate_on_open = false
 
@@ -43,6 +44,7 @@ function M.profile_file()
 				vim.notify("Profiling failed: " .. (res.stderr or ""))
 				return
 			end
+			M.profiles = {}
 
 			local lines = vim.fn.readfile("/tmp/python-profile.json", "b")
 			local ok, data = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
@@ -68,6 +70,7 @@ function M.profile_file()
 				end
 			end
 			walk(data.root_frame)
+			M.total_time = data.root_frame.time
 
 			M.annotate_all_open_buffers()
 		end)
@@ -94,13 +97,8 @@ function M.annotate_lines(filepath)
 	local bufnr = vim.fn.bufnr(filepath, true)
 	vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
 
-	local max_time = 0
-	for _, t in pairs(lines) do
-		max_time = max_time + t.time
-	end
-
 	for line, t in pairs(lines) do
-		local ratio = t.time / max_time
+		local ratio = t.time / M.total_time
 		local highlight_group = get_highlight_group(ratio)
 		vim.api.nvim_buf_set_extmark(bufnr, M.ns, line - 1, 0, {
 			virt_text = {
