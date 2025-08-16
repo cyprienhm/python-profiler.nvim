@@ -120,4 +120,83 @@ function M.clear_annotations()
 	end
 end
 
+function M.discover_python_files()
+	local handle =
+		io.popen("find . -name '*.py' -not -path '*/.*' -not -path '*/__pycache__/*' | tr '\n' ',' | sed 's/,$//'")
+	if handle == nil then
+		return ""
+	end
+	local result = handle:read("*a"):gsub("%s+$", "")
+	handle:close()
+	vim.notify(vim.inspect(result))
+	return result
+end
+
+function M.line_profile_file()
+	local filepath = vim.api.nvim_buf_get_name(0)
+	filepath = normalize_path(filepath)
+	local modules = M.discover_python_files()
+
+	if modules == "" then
+		vim.notify("No Python modules found to profile")
+		return
+	end
+
+	local lprof_file = filepath .. ".lprof"
+	vim.notify("python-profiler: line profiling " .. filepath .. " with modules: " .. modules)
+
+	vim.system({ "kernprof", "-l", "-p", modules, filepath }, {
+		stdout_buffered = true,
+		stderr_buffered = true,
+	}, function(res)
+		vim.schedule(function()
+			if res.code ~= 0 then
+				vim.notify("Line profiling failed: " .. (res.stderr or ""))
+				return
+			end
+
+			vim.system({ "python", "-m", "line_profiler", "-zrmt", lprof_file }, {
+				stdout_buffered = true,
+				stderr_buffered = true,
+			}, function(res2)
+				vim.schedule(function()
+					if res2.code ~= 0 then
+						vim.notify("Failed to read lprof file: " .. (res2.stderr or ""))
+						return
+					end
+
+					M.profiles = {}
+					M.parse_kernprof_output(res2.stdout)
+					M.annotate_all_open_buffers()
+				end)
+			end)
+		end)
+	end)
+end
+
+function M.parse_kernprof_output(output)
+	local current_file = nil
+	M.profiles = {}
+	M.total_time = 0
+
+	for line in output:gmatch("[^\r\n]+") do
+		local file_match = line:match("^File:%s+(.+)")
+		if file_match then
+			current_file = normalize_path(file_match)
+			M.profiles[current_file] = {}
+		elseif current_file then
+			local line_no, hits, time_us = line:match("^%s*(%d+)%s+(%d+)%s+([%d%.]+)%s+[%d%.]+%s+[%d%.]+")
+			if line_no then
+				local line_num = tonumber(line_no)
+				local t = tonumber(time_us) / 1e6
+				M.profiles[current_file][line_num] = {
+					time = t,
+					count = tonumber(hits),
+				}
+				M.total_time = M.total_time + t
+			end
+		end
+	end
+end
+
 return M
