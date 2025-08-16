@@ -1,7 +1,10 @@
 local M = {}
-M.profiles = {}
-M.total_time = 0
-M.ns = vim.api.nvim_create_namespace("profiler")
+M.profiles = { pyinstrument = {}, kernprof = {} }
+M.total_time = { pyinstrument = 0, kernprof = 0 }
+M.ns = {
+	pyinstrument = vim.api.nvim_create_namespace("profiler_pyinstrument"),
+	kernprof = vim.api.nvim_create_namespace("profiler_kernprof"),
+}
 M.annotate_on_open = false
 
 local function normalize_path(path)
@@ -44,7 +47,7 @@ function M.profile_file()
 				vim.notify("python-profiler: profiling failed: " .. (res.stderr or ""))
 				return
 			end
-			M.profiles = {}
+			M.profiles.pyinstrument = {}
 
 			local lines = vim.fn.readfile("/tmp/python-profile.json", "b")
 			local ok, data = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
@@ -57,8 +60,8 @@ function M.profile_file()
 				if frame.is_application_code then
 					local file = frame.file_path
 					file = normalize_path(file)
-					M.profiles[file] = M.profiles[file] or {}
-					local t = M.profiles[file]
+					M.profiles.pyinstrument[file] = M.profiles.pyinstrument[file] or {}
+					local t = M.profiles.pyinstrument[file]
 					if not t[frame.line_no] then
 						t[frame.line_no] = { time = 0, count = 0 }
 					end
@@ -70,37 +73,37 @@ function M.profile_file()
 				end
 			end
 			walk(data.root_frame)
-			M.total_time = data.root_frame.time
+			M.total_time.pyinstrument = data.root_frame.time
 
-			M.annotate_all_open_buffers()
+			M.annotate_all_open_buffers("pyinstrument")
 		end)
 	end)
 end
 
-function M.annotate_all_open_buffers()
-	for filepath, _ in pairs(M.profiles) do
+function M.annotate_all_open_buffers(tool)
+	for filepath, _ in pairs(M.profiles[tool]) do
 		local bufnr = vim.fn.bufnr(filepath, true)
 		if vim.api.nvim_buf_is_loaded(bufnr) then
-			M.annotate_lines(filepath)
+			M.annotate_lines(filepath, tool)
 		end
 	end
 end
 
-function M.annotate_lines(filepath)
+function M.annotate_lines(filepath, tool)
 	filepath = filepath or vim.api.nvim_buf_get_name(0)
 	filepath = normalize_path(filepath)
-	local lines = M.profiles[filepath]
+	local lines = M.profiles[tool][filepath]
 	if not lines then
 		return
 	end
 
 	local bufnr = vim.fn.bufnr(filepath, true)
-	vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
+	vim.api.nvim_buf_clear_namespace(bufnr, M.ns[tool], 0, -1)
 
 	for line, t in pairs(lines) do
-		local ratio = t.time / M.total_time
+		local ratio = t.time / M.total_time[tool]
 		local highlight_group = get_highlight_group(ratio)
-		vim.api.nvim_buf_set_extmark(bufnr, M.ns, line - 1, 0, {
+		vim.api.nvim_buf_set_extmark(bufnr, M.ns[tool], line - 1, 0, {
 			virt_text = {
 				{ make_bar(ratio, 10) .. " ", highlight_group },
 				{ string.format("%.3fs (%.1f%%) -- %d calls", t.time, ratio * 100, t.count), highlight_group },
@@ -110,12 +113,12 @@ function M.annotate_lines(filepath)
 	end
 end
 
-function M.clear_annotations()
-	for filepath, _ in pairs(M.profiles) do
+function M.clear_annotations(tool)
+	for filepath, _ in pairs(M.profiles[tool]) do
 		filepath = normalize_path(filepath)
 		local bufnr = vim.fn.bufnr(filepath, true)
 		if vim.api.nvim_buf_is_loaded(bufnr) then
-			vim.api.nvim_buf_clear_namespace(bufnr, M.ns, 0, -1)
+			vim.api.nvim_buf_clear_namespace(bufnr, M.ns[tool], 0, -1)
 		end
 	end
 end
@@ -164,9 +167,9 @@ function M.line_profile_file()
 						return
 					end
 
-					M.profiles = {}
+					M.profiles.kernprof = {}
 					M.parse_kernprof_output(res2.stdout)
-					M.annotate_all_open_buffers()
+					M.annotate_all_open_buffers("kernprof")
 				end)
 			end)
 		end)
@@ -175,24 +178,23 @@ end
 
 function M.parse_kernprof_output(output)
 	local current_file = nil
-	M.profiles = {}
-	M.total_time = 0
+	M.total_time.kernprof = 0
 
 	for line in output:gmatch("[^\r\n]+") do
 		local file_match = line:match("^File:%s+(.+)")
 		if file_match then
 			current_file = normalize_path(file_match)
-			M.profiles[current_file] = {}
+			M.profiles.kernprof[current_file] = {}
 		elseif current_file then
 			local line_no, hits, time_us = line:match("^%s*(%d+)%s+(%d+)%s+([%d%.]+)%s+[%d%.]+%s+[%d%.]+")
 			if line_no then
 				local line_num = tonumber(line_no)
 				local t = tonumber(time_us) / 1e6
-				M.profiles[current_file][line_num] = {
+				M.profiles.kernprof[current_file][line_num] = {
 					time = t,
 					count = tonumber(hits),
 				}
-				M.total_time = M.total_time + t
+				M.total_time.kernprof = M.total_time.kernprof + t
 			end
 		end
 	end
