@@ -4,6 +4,10 @@ local M = {}
 
 function M.setup()
 	profiler.create_gradient_highlights()
+	vim.api.nvim_create_user_command("PythonProfileStart", function()
+		profiler.profile_with_picker()
+	end, {})
+
 	vim.api.nvim_create_user_command("PythonProfileCallStackStart", function()
 		profiler.annotate_on_open = true
 		profiler.profile_file()

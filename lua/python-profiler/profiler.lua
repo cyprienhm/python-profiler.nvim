@@ -34,12 +34,21 @@ local function make_bar(ratio, width)
 	return string.rep("█", filled) .. string.rep("░", width - filled)
 end
 
-function M.profile_file()
+function M.profile_file(args)
 	local filepath = vim.api.nvim_buf_get_name(0)
 	filepath = paths.normalize_path(filepath)
-	vim.notify("python-profiler: profiling " .. filepath .. " ...")
+	local cmd = { "pyinstrument", "-r", "json", "-o", paths.get_temp_json_path(), filepath }
 
-	vim.system({ "pyinstrument", "-r", "json", "-o", paths.get_temp_json_path(), filepath }, {
+	if args and args ~= "" then
+		for arg in args:gmatch("%S+") do
+			table.insert(cmd, arg)
+		end
+		vim.notify("python-profiler: profiling " .. filepath .. " with args: " .. args)
+	else
+		vim.notify("python-profiler: profiling " .. filepath .. " ...")
+	end
+
+	vim.system(cmd, {
 		stdout_buffered = true,
 		stderr_buffered = true,
 	}, function(res)
@@ -106,7 +115,7 @@ function M.clear_annotations(tool)
 	end
 end
 
-function M.line_profile_file()
+function M.line_profile_file(args)
 	local filepath = vim.api.nvim_buf_get_name(0)
 	filepath = paths.normalize_path(filepath)
 	local modules = files.discover_python_files()
@@ -117,9 +126,20 @@ function M.line_profile_file()
 	end
 
 	local lprof_file = paths.get_lprof_path(filepath)
-	vim.notify("python-profiler: line profiling " .. filepath .. " with modules: " .. modules)
+	local cmd = { "kernprof", "-l", "-p", modules, filepath }
 
-	vim.system({ "kernprof", "-l", "-p", modules, filepath }, {
+	if args and args ~= "" then
+		for arg in args:gmatch("%S+") do
+			table.insert(cmd, arg)
+		end
+		vim.notify(
+			"python-profiler: line profiling " .. filepath .. " with modules: " .. modules .. " and args: " .. args
+		)
+	else
+		vim.notify("python-profiler: line profiling " .. filepath .. " with modules: " .. modules)
+	end
+
+	vim.system(cmd, {
 		stdout_buffered = true,
 		stderr_buffered = true,
 	}, function(res)
@@ -146,6 +166,49 @@ function M.line_profile_file()
 				end)
 			end)
 		end)
+	end)
+end
+
+function M.profile_with_picker()
+	local options = {
+		"Call stack profile current file",
+		"Call stack profile with arguments",
+		"Line profile current file",
+		"Line profile with arguments",
+	}
+
+	vim.ui.select(options, {
+		prompt = "Select profiling mode:",
+	}, function(choice, idx)
+		if not idx then
+			return
+		end
+
+		if idx == 1 then
+			M.annotate_on_open = true
+			M.profile_file()
+		elseif idx == 2 then
+			vim.ui.input({
+				prompt = "Arguments: ",
+			}, function(args)
+				if args then
+					M.annotate_on_open = true
+					M.profile_file(args)
+				end
+			end)
+		elseif idx == 3 then
+			M.annotate_on_open = true
+			M.line_profile_file()
+		elseif idx == 4 then
+			vim.ui.input({
+				prompt = "Arguments: ",
+			}, function(args)
+				if args then
+					M.annotate_on_open = true
+					M.line_profile_file(args)
+				end
+			end)
+		end
 	end)
 end
 
