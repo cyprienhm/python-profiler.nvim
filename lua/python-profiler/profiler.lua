@@ -1,3 +1,6 @@
+local pyinstrument_parser = require("python-profiler.parsers.pyinstrument")
+local kernprof_parser = require("python-profiler.parsers.kernprof")
+
 local M = {}
 M.profiles = { pyinstrument = {}, kernprof = {} }
 M.total_time = { pyinstrument = 0, kernprof = 0 }
@@ -47,33 +50,15 @@ function M.profile_file()
 				vim.notify("python-profiler: profiling failed: " .. (res.stderr or ""))
 				return
 			end
-			M.profiles.pyinstrument = {}
 
-			local lines = vim.fn.readfile("/tmp/python-profile.json", "b")
-			local ok, data = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
-			if not ok or not data then
-				vim.notify("python-profiler: failed to parse profiling JSON")
+			local result, err = pyinstrument_parser.parse_json_output("/tmp/python-profile.json")
+			if not result then
+				vim.notify("python-profiler: " .. err)
 				return
 			end
 
-			local function walk(frame)
-				if frame.is_application_code then
-					local file = frame.file_path
-					file = normalize_path(file)
-					M.profiles.pyinstrument[file] = M.profiles.pyinstrument[file] or {}
-					local t = M.profiles.pyinstrument[file]
-					if not t[frame.line_no] then
-						t[frame.line_no] = { time = 0, count = 0 }
-					end
-					t[frame.line_no].time = t[frame.line_no].time + frame.time
-					t[frame.line_no].count = t[frame.line_no].count + 1
-				end
-				for _, child in ipairs(frame.children or {}) do
-					walk(child)
-				end
-			end
-			walk(data.root_frame)
-			M.total_time.pyinstrument = data.root_frame.time
+			M.profiles.pyinstrument = result.profiles
+			M.total_time.pyinstrument = result.total_time
 
 			M.annotate_all_open_buffers("pyinstrument")
 		end)
@@ -167,37 +152,14 @@ function M.line_profile_file()
 						return
 					end
 
-					M.profiles.kernprof = {}
-					M.parse_kernprof_output(res2.stdout)
+					local result = kernprof_parser.parse_output(res2.stdout)
+					M.profiles.kernprof = result.profiles
+					M.total_time.kernprof = result.total_time
 					M.annotate_all_open_buffers("kernprof")
 				end)
 			end)
 		end)
 	end)
-end
-
-function M.parse_kernprof_output(output)
-	local current_file = nil
-	M.total_time.kernprof = 0
-
-	for line in output:gmatch("[^\r\n]+") do
-		local file_match = line:match("^File:%s+(.+)")
-		if file_match then
-			current_file = normalize_path(file_match)
-			M.profiles.kernprof[current_file] = {}
-		elseif current_file then
-			local line_no, hits, time_us = line:match("^%s*(%d+)%s+(%d+)%s+([%d%.]+)%s+[%d%.]+%s+[%d%.]+")
-			if line_no then
-				local line_num = tonumber(line_no)
-				local t = tonumber(time_us) / 1e6
-				M.profiles.kernprof[current_file][line_num] = {
-					time = t,
-					count = tonumber(hits),
-				}
-				M.total_time.kernprof = M.total_time.kernprof + t
-			end
-		end
-	end
 end
 
 return M
