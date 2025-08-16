@@ -41,7 +41,7 @@ function M.profile_file()
 	}, function(res)
 		vim.schedule(function()
 			if res.code ~= 0 then
-				vim.notify("Profiling failed: " .. (res.stderr or ""))
+				vim.notify("python-profiler: profiling failed: " .. (res.stderr or ""))
 				return
 			end
 			M.profiles = {}
@@ -49,7 +49,7 @@ function M.profile_file()
 			local lines = vim.fn.readfile("/tmp/python-profile.json", "b")
 			local ok, data = pcall(vim.fn.json_decode, table.concat(lines, "\n"))
 			if not ok or not data then
-				vim.notify("Failed to parse profiling JSON")
+				vim.notify("python-profiler: failed to parse profiling JSON")
 				return
 			end
 
@@ -128,7 +128,6 @@ function M.discover_python_files()
 	end
 	local result = handle:read("*a"):gsub("%s+$", "")
 	handle:close()
-	vim.notify(vim.inspect(result))
 	return result
 end
 
@@ -138,7 +137,7 @@ function M.line_profile_file()
 	local modules = M.discover_python_files()
 
 	if modules == "" then
-		vim.notify("No Python modules found to profile")
+		vim.notify("python-profiler: no Python modules found to profile")
 		return
 	end
 
@@ -151,7 +150,7 @@ function M.line_profile_file()
 	}, function(res)
 		vim.schedule(function()
 			if res.code ~= 0 then
-				vim.notify("Line profiling failed: " .. (res.stderr or ""))
+				vim.notify("python-profiler: line profiling failed: " .. (res.stderr or ""))
 				return
 			end
 
@@ -161,7 +160,7 @@ function M.line_profile_file()
 			}, function(res2)
 				vim.schedule(function()
 					if res2.code ~= 0 then
-						vim.notify("Failed to read lprof file: " .. (res2.stderr or ""))
+						vim.notify("python-profiler: failed to read lprof file: " .. (res2.stderr or ""))
 						return
 					end
 
