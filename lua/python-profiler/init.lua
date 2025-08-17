@@ -11,12 +11,12 @@ function M.setup()
 		profiler.profile_with_picker()
 	end, {})
 
-	vim.api.nvim_create_user_command("PythonProfileCallStackStart", function()
+	vim.api.nvim_create_user_command("PythonProfilePyInstrument", function()
 		state.annotate_on_open = true
 		profiler.profile_file()
 	end, {})
 
-	vim.api.nvim_create_user_command("PythonProfileLinesStart", function()
+	vim.api.nvim_create_user_command("PythonProfileLineProfiler", function()
 		state.annotate_on_open = true
 		profiler.line_profile_file()
 	end, {})
