@@ -101,10 +101,10 @@ end
 
 function M.profile_with_picker()
 	local options = {
-		"Call stack profile current file",
-		"Call stack profile with arguments",
-		"Line profile current file",
-		"Line profile with arguments",
+		"pyinstrument: Call stack profile current file",
+		"pyinstrument: Call stack profile with arguments",
+		"line_profiler: Line profile current file",
+		"line_profiler: Line profile with arguments",
 	}
 
 	vim.ui.select(options, {

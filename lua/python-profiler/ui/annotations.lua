@@ -32,7 +32,12 @@ function M.annotate_kernprof(filepath, profiles, total_time, ns)
 				virt_text = {
 					{ make_bar(func_ratio, 15, "kernprof") .. " ", highlight_group },
 					{
-						string.format("[L] %s: %.3fs (%.1f%% total)", func.name, func.total_time, func_ratio * 100),
+						string.format(
+							"[line_profiler] %s: %.3fs (%.1f%% total)",
+							func.name,
+							func.total_time,
+							func_ratio * 100
+						),
 						highlight_group,
 					},
 				},
@@ -56,7 +61,7 @@ function M.annotate_kernprof(filepath, profiles, total_time, ns)
 				{ make_bar(bar_ratio, 10, "kernprof") .. " ", highlight_group },
 				{
 					string.format(
-						"%.3fs %s (%s, %s) -- %d calls [L]%s",
+						"%.3fs %s (%s, %s) -- %d calls [line_profiler]%s",
 						t.time,
 						per_hit_info,
 						percent_func,
@@ -93,7 +98,7 @@ function M.annotate_pyinstrument(filepath, profiles, total_time, ns)
 				{ make_bar(func_ratio, 15, "pyinstrument") .. " ", highlight_group },
 				{
 					string.format(
-						"[C] %s: %.3fs total, %.3fs self (%.1f%% total)",
+						"[pyinstrument] %s: %.3fs total, %.3fs self (%.1f%% total)",
 						func.name,
 						func.total_time,
 						func.self_time,
