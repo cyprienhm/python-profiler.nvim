@@ -10,12 +10,32 @@ function M.read_json_file(filepath)
 end
 
 function M.discover_python_files()
-	local root = vim.fn.getcwd()
-	local files = vim.fs.find(function(name, path)
-		return name:match("%.py$") and not path:match("/__pycache__/") and not path:match("/%.")
-	end, { type = "file", limit = math.huge, path = root })
-
-	return table.concat(files, ",")
+	local cmd = {
+		"fd",
+		"-e",
+		"py",
+		"-t",
+		"f",
+		"-H",
+		"-E",
+		".git",
+		"-E",
+		"__pycache__",
+		"-E",
+		"venv",
+		"-E",
+		".venv",
+		"-E",
+		"node_modules",
+		"-E",
+		"*.egg-info",
+		"-0",
+	}
+	local result = vim.system(cmd, { text = true }):wait()
+	if result.code ~= 0 then
+		return ""
+	end
+	return result.stdout:gsub("%z", ","):gsub(",$", "")
 end
 
 return M
