@@ -34,8 +34,8 @@ function M.setup()
 			if state.annotate_on_open then
 				vim.schedule(function()
 					local filepath = vim.api.nvim_buf_get_name(0)
-					annotations.annotate_lines(filepath, "pyinstrument", state.profiles, state.total_time, state.ns)
-					annotations.annotate_lines(filepath, "kernprof", state.profiles, state.total_time, state.ns)
+					annotations.annotate_buffer(filepath, "pyinstrument", state.profiles, state.total_time, state.ns)
+					annotations.annotate_buffer(filepath, "kernprof", state.profiles, state.total_time, state.ns)
 				end)
 			end
 		end,

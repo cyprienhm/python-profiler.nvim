@@ -3,140 +3,212 @@ local paths = require("python-profiler.utils.paths")
 
 local M = {}
 
-local function make_bar(ratio, width, tool)
-	local filled = math.floor(ratio * width)
-	if tool == "kernprof" then
-		return string.rep("█", filled) .. string.rep("░", width - filled)
-	else
-		return string.rep("▉", filled) .. string.rep("▊", width - filled)
+local bar_cache = {}
+local function make_bar(ratio, width, style)
+	local key = string.format("%d_%d_%s", math.floor(ratio * 100), width, style)
+	if bar_cache[key] then
+		return bar_cache[key]
 	end
+
+	local filled = math.floor(ratio * width)
+	local chars = style == "kernprof" and { filled = "█", empty = "░" } or { filled = "▉", empty = "▊" }
+
+	local bar = string.rep(chars.filled, filled) .. string.rep(chars.empty, width - filled)
+	bar_cache[key] = bar
+	return bar
 end
 
-function M.annotate_kernprof(filepath, profiles, total_time, ns)
-	filepath = filepath or vim.api.nvim_buf_get_name(0)
-	filepath = paths.normalize_path(filepath)
-	local file_data = profiles.kernprof[filepath]
-	if not file_data or not file_data.lines then
-		return
+local function safe_ratio(numerator, denominator, default)
+	if not numerator or not denominator or denominator == 0 then
+		return default or 0
+	end
+	return numerator / denominator
+end
+
+local function annotate_kernprof_function(bufnr, func, total_time, ns)
+	local ratio = safe_ratio(func.total_time, total_time)
+	local highlight = highlights.get_highlight_group(ratio)
+
+	vim.api.nvim_buf_set_extmark(bufnr, ns, func.start_line - 1, 0, {
+		virt_text = {
+			{ make_bar(ratio, 15, "kernprof") .. " ", highlight },
+			{
+				string.format("[line_profiler] %s: %.3fs (%.1f%% total)", func.name, func.total_time, ratio * 100),
+				highlight,
+			},
+		},
+		virt_text_pos = "eol",
+		priority = 100,
+	})
+end
+
+local function annotate_kernprof_line(bufnr, line_num, data, total_time, ns)
+	local bar_ratio = safe_ratio(data.percent_in_function, 100)
+	local total_ratio = safe_ratio(data.time, total_time)
+	local highlight = highlights.get_highlight_group(bar_ratio)
+
+	local parts = {
+		string.format("%.3fs", data.time),
+		string.format("%.3fs/hit", data.time_per_hit or 0),
+		string.format("(%.1f%% func, %.1f%% total)", data.percent_in_function or 0, total_ratio * 100),
+		string.format("-- %d calls", data.count or 0),
+		"[line_profiler]",
+	}
+
+	if data.function_name then
+		table.insert(parts, string.format(" [%s]", data.function_name))
 	end
 
-	local lines = file_data.lines
-	local bufnr = vim.fn.bufnr(filepath, true)
-	vim.api.nvim_buf_clear_namespace(bufnr, ns.kernprof, 0, -1)
+	vim.api.nvim_buf_set_extmark(bufnr, ns, line_num - 1, 0, {
+		virt_text = {
+			{ make_bar(bar_ratio, 10, "kernprof") .. " ", highlight },
+			{ table.concat(parts, " "), highlight },
+		},
+		virt_text_pos = "eol",
+	})
+end
+
+function M.annotate_kernprof(bufnr, file_data, total_time, ns)
+	if not file_data then
+		return false
+	end
+
+	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
 	if file_data.functions then
 		for _, func in ipairs(file_data.functions) do
-			local func_ratio = func.total_time / total_time.kernprof
-			local highlight_group = highlights.get_highlight_group(func_ratio)
-			vim.api.nvim_buf_set_extmark(bufnr, ns.kernprof, func.start_line - 1, 0, {
-				virt_text = {
-					{ make_bar(func_ratio, 15, "kernprof") .. " ", highlight_group },
-					{
-						string.format(
-							"[line_profiler] %s: %.3fs (%.1f%% total)",
-							func.name,
-							func.total_time,
-							func_ratio * 100
-						),
-						highlight_group,
-					},
-				},
-				virt_text_pos = "eol",
-			})
+			annotate_kernprof_function(bufnr, func, total_time, ns)
 		end
 	end
 
-	for line, t in pairs(lines) do
-		local bar_ratio = t.percent_in_function / 100
-		local total_ratio = t.time / total_time.kernprof
-		local highlight_group = highlights.get_highlight_group(bar_ratio)
-
-		local function_info = t.function_name and (" [" .. t.function_name .. "]") or ""
-		local percent_func = string.format("%.1f%% func", t.percent_in_function)
-		local percent_total = string.format("%.1f%% total", total_ratio * 100)
-		local per_hit_info = string.format("%.3fs/hit", t.time_per_hit)
-
-		vim.api.nvim_buf_set_extmark(bufnr, ns.kernprof, line - 1, 0, {
-			virt_text = {
-				{ make_bar(bar_ratio, 10, "kernprof") .. " ", highlight_group },
-				{
-					string.format(
-						"%.3fs %s (%s, %s) -- %d calls [line_profiler]%s",
-						t.time,
-						per_hit_info,
-						percent_func,
-						percent_total,
-						t.count,
-						function_info
-					),
-					highlight_group,
-				},
-			},
-			virt_text_pos = "eol",
-		})
+	if file_data.lines then
+		for line_num, data in pairs(file_data.lines) do
+			annotate_kernprof_line(bufnr, line_num, data, total_time, ns)
+		end
 	end
+
+	return true
 end
 
-function M.annotate_pyinstrument(filepath, profiles, total_time, ns)
-	filepath = filepath or vim.api.nvim_buf_get_name(0)
-	filepath = paths.normalize_path(filepath)
-	local file_data = profiles.pyinstrument[filepath]
+function M.annotate_pyinstrument(bufnr, file_data, total_time, ns)
 	if not file_data or not file_data.functions then
-		return
+		return false
 	end
 
-	local bufnr = vim.fn.bufnr(filepath, true)
-	vim.api.nvim_buf_clear_namespace(bufnr, ns.pyinstrument, 0, -1)
+	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
 	for _, func in ipairs(file_data.functions) do
-		local func_ratio = func.total_time / total_time.pyinstrument
-		local self_ratio = func.self_time / total_time.pyinstrument
-		local highlight_group = highlights.get_highlight_group(func_ratio)
+		local func_ratio = safe_ratio(func.total_time, total_time)
+		local highlight = highlights.get_highlight_group(func_ratio)
 
-		vim.api.nvim_buf_set_extmark(bufnr, ns.pyinstrument, func.start_line - 1, 0, {
+		vim.api.nvim_buf_set_extmark(bufnr, ns, func.start_line - 1, 0, {
 			virt_text = {
-				{ make_bar(func_ratio, 15, "pyinstrument") .. " ", highlight_group },
+				{ make_bar(func_ratio, 15, "pyinstrument") .. " ", highlight },
 				{
 					string.format(
 						"[pyinstrument] %s: %.3fs total, %.3fs self (%.1f%% total)",
 						func.name,
-						func.total_time,
-						func.self_time,
+						func.total_time or 0,
+						func.self_time or 0,
 						func_ratio * 100
 					),
-					highlight_group,
+					highlight,
 				},
 			},
 			virt_text_pos = "eol",
 		})
 	end
+
+	return true
 end
 
-function M.annotate_lines(filepath, tool, profiles, total_time, ns)
-	if tool == "kernprof" then
-		M.annotate_kernprof(filepath, profiles, total_time, ns)
-	elseif tool == "pyinstrument" then
-		M.annotate_pyinstrument(filepath, profiles, total_time, ns)
+function M.annotate_buffer(filepath, tool, profiles, total_time, ns)
+	filepath = paths.normalize_path(filepath)
+
+	local file_data = profiles[tool] and profiles[tool][filepath]
+	if not file_data then
+		return false
 	end
+
+	local bufnr = vim.fn.bufnr(filepath)
+	if bufnr == -1 then
+		return false
+	end
+
+	local tool_total = total_time[tool]
+	if not tool_total or tool_total == 0 then
+		return false
+	end
+
+	if tool == "kernprof" then
+		return M.annotate_kernprof(bufnr, file_data, tool_total, ns.kernprof)
+	elseif tool == "pyinstrument" then
+		return M.annotate_pyinstrument(bufnr, file_data, tool_total, ns.pyinstrument)
+	end
+
+	return false
 end
 
 function M.annotate_all_open_buffers(tool, profiles, total_time, ns)
-	for filepath, _ in pairs(profiles[tool]) do
-		local bufnr = vim.fn.bufnr(filepath, true)
+	if not profiles[tool] then
+		return 0
+	end
+
+	local annotated = 0
+	local loaded_buffers = {}
+
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_loaded(bufnr) then
-			M.annotate_lines(filepath, tool, profiles, total_time, ns)
+			local name = vim.api.nvim_buf_get_name(bufnr)
+			if name ~= "" then
+				loaded_buffers[paths.normalize_path(name)] = bufnr
+			end
 		end
 	end
+
+	for filepath, _ in pairs(profiles[tool]) do
+		local normalized = paths.normalize_path(filepath)
+		local bufnr = loaded_buffers[normalized]
+
+		if bufnr then
+			local file_data = profiles[tool][filepath]
+			local tool_total = total_time[tool]
+
+			if tool_total and tool_total > 0 then
+				local success
+				if tool == "kernprof" then
+					success = M.annotate_kernprof(bufnr, file_data, tool_total, ns.kernprof)
+				elseif tool == "pyinstrument" then
+					success = M.annotate_pyinstrument(bufnr, file_data, tool_total, ns.pyinstrument)
+				end
+
+				if success then
+					annotated = annotated + 1
+				end
+			end
+		end
+	end
+
+	return annotated
 end
 
 function M.clear_annotations(tool, profiles, ns)
+	if not profiles[tool] then
+		return 0
+	end
+
+	local cleared = 0
 	for filepath, _ in pairs(profiles[tool]) do
-		filepath = paths.normalize_path(filepath)
-		local bufnr = vim.fn.bufnr(filepath, true)
-		if vim.api.nvim_buf_is_loaded(bufnr) then
+		local normalized = paths.normalize_path(filepath)
+		local bufnr = vim.fn.bufnr(normalized)
+
+		if bufnr ~= -1 and vim.api.nvim_buf_is_loaded(bufnr) then
 			vim.api.nvim_buf_clear_namespace(bufnr, ns[tool], 0, -1)
+			cleared = cleared + 1
 		end
 	end
+
+	return cleared
 end
 
 return M
