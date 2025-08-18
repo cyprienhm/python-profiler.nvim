@@ -2,6 +2,7 @@ local profiler = require("python-profiler.profiler")
 local highlights = require("python-profiler.ui.highlights")
 local annotations = require("python-profiler.ui.annotations")
 local state = require("python-profiler.state")
+local notifications = require("python-profiler.utils.notifications")
 
 local M = {}
 
@@ -44,7 +45,7 @@ function M.setup()
 		state.annotate_on_open = false
 		annotations.clear_annotations("pyinstrument", state.profiles, state.ns)
 		annotations.clear_annotations("kernprof", state.profiles, state.ns)
-		vim.notify("python-profiler: cleared annotations")
+		notifications.show("python-profiler: cleared annotations", vim.log.levels.INFO)
 	end, {})
 end
 

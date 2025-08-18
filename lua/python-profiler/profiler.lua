@@ -4,6 +4,8 @@ local files = require("python-profiler.utils.files")
 local paths = require("python-profiler.utils.paths")
 local annotations = require("python-profiler.ui.annotations")
 local state = require("python-profiler.state")
+local spinner = require("python-profiler.utils.spinner")
+local notifications = require("python-profiler.utils.notifications")
 
 local M = {}
 
@@ -16,10 +18,9 @@ function M.profile_file(args)
 		for arg in args:gmatch("%S+") do
 			table.insert(cmd, arg)
 		end
-		vim.notify("python-profiler: profiling " .. filepath .. " with args: " .. args)
-	else
-		vim.notify("python-profiler: profiling " .. filepath .. " ...")
 	end
+
+	local spinner_id = spinner.start("Profiling with pyinstrument...")
 
 	vim.system(cmd, {
 		stdout_buffered = true,
@@ -27,13 +28,13 @@ function M.profile_file(args)
 	}, function(res)
 		vim.schedule(function()
 			if res.code ~= 0 then
-				vim.notify("python-profiler: profiling failed: " .. (res.stderr or ""))
+				spinner.stop(spinner_id, "python-profiler: profiling failed: " .. (res.stderr or ""))
 				return
 			end
 
 			local result, err = pyinstrument_parser.parse_json_output(paths.get_temp_json_path())
 			if not result then
-				vim.notify("python-profiler: " .. err)
+				spinner.stop(spinner_id, "python-profiler: " .. err)
 				return
 			end
 
@@ -41,6 +42,7 @@ function M.profile_file(args)
 			state.total_time.pyinstrument = result.total_time
 
 			annotations.annotate_all_open_buffers("pyinstrument", state.profiles, state.total_time, state.ns)
+			spinner.stop(spinner_id, "python-profiler: pyinstrument profiling complete")
 		end)
 	end)
 end
@@ -51,7 +53,7 @@ function M.line_profile_file(args)
 	local modules = files.discover_python_files()
 
 	if modules == "" then
-		vim.notify("python-profiler: no Python modules found to profile")
+		notifications.show("python-profiler: no Python modules found to profile", vim.log.levels.WARN)
 		return
 	end
 
@@ -62,12 +64,9 @@ function M.line_profile_file(args)
 		for arg in args:gmatch("%S+") do
 			table.insert(cmd, arg)
 		end
-		vim.notify(
-			"python-profiler: line profiling " .. filepath .. " with modules: " .. modules .. " and args: " .. args
-		)
-	else
-		vim.notify("python-profiler: line profiling " .. filepath .. " with modules: " .. modules)
 	end
+
+	local spinner_id = spinner.start("Profiling with line_profiler...")
 
 	vim.system(cmd, {
 		stdout_buffered = true,
@@ -75,7 +74,7 @@ function M.line_profile_file(args)
 	}, function(res)
 		vim.schedule(function()
 			if res.code ~= 0 then
-				vim.notify("python-profiler: line profiling failed: " .. (res.stderr or ""))
+				spinner.stop(spinner_id, "python-profiler: line profiling failed: " .. (res.stderr or ""))
 				return
 			end
 
@@ -85,7 +84,7 @@ function M.line_profile_file(args)
 			}, function(res2)
 				vim.schedule(function()
 					if res2.code ~= 0 then
-						vim.notify("python-profiler: failed to read lprof file: " .. (res2.stderr or ""))
+						spinner.stop(spinner_id, "python-profiler: failed to read lprof file: " .. (res2.stderr or ""))
 						return
 					end
 
@@ -93,6 +92,7 @@ function M.line_profile_file(args)
 					state.profiles.kernprof = result.profiles
 					state.total_time.kernprof = result.total_time
 					annotations.annotate_all_open_buffers("kernprof", state.profiles, state.total_time, state.ns)
+					spinner.stop(spinner_id, "python-profiler: line_profiler profiling complete")
 				end)
 			end)
 		end)
