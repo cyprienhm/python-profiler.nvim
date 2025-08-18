@@ -10,15 +10,11 @@ function M.read_json_file(filepath)
 end
 
 function M.discover_python_files()
-	local handle =
-		io.popen("find . -name '*.py' -not -path '*/.*' -not -path '*/__pycache__/*' | tr '\n' ',' | sed 's/,$//'")
-	if handle == nil then
-		return ""
-	end
-	local result = handle:read("*a"):gsub("%s+$", "")
-	handle:close()
-	return result
+	local files = vim.fs.find(function(name, path)
+		return name:match("%.py$") and not path:match("/__pycache__/") and not path:match("/%.")
+	end, { type = "file", limit = math.huge })
+
+	return table.concat(files, ",")
 end
 
 return M
-
