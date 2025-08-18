@@ -57,8 +57,8 @@ function M.line_profile_file(args)
 		return
 	end
 
-	local lprof_file = paths.get_lprof_path(filepath)
-	local cmd = { "kernprof", "-l", "-p", modules, filepath }
+	local lprof_file = paths.get_temp_lprof_path(filepath)
+	local cmd = { "kernprof", "-l", "-o", lprof_file, "-p", modules, filepath }
 
 	if args and args ~= "" then
 		for arg in args:gmatch("%S+") do

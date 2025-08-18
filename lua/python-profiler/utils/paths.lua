@@ -12,4 +12,9 @@ function M.get_lprof_path(filepath)
 	return filepath .. ".lprof"
 end
 
+function M.get_temp_lprof_path(filepath)
+	local filename = vim.fn.fnamemodify(filepath, ":t")
+	return "/tmp/" .. filename .. ".lprof"
+end
+
 return M
