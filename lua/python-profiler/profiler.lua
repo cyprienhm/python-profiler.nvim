@@ -9,7 +9,19 @@ local notifications = require("python-profiler.utils.notifications")
 
 local M = {}
 
+local function check_command_exists(cmd)
+	return vim.fn.executable(cmd) == 1
+end
+
 function M.profile_file(args)
+	if not check_command_exists("pyinstrument") then
+		notifications.show(
+			"python-profiler: pyinstrument not found. Install pyinstrument: `pip install pyinstrument`",
+			vim.log.levels.ERROR
+		)
+		return
+	end
+
 	local filepath = vim.api.nvim_buf_get_name(0)
 	filepath = paths.normalize_path(filepath)
 	local cmd = { "pyinstrument", "-r", "json", "-o", paths.get_temp_json_path(), filepath }
@@ -48,6 +60,14 @@ function M.profile_file(args)
 end
 
 function M.line_profile_file(args)
+	if not check_command_exists("kernprof") then
+		notifications.show(
+			"python-profiler: kernprof not found. Install line_profiler: `pip install line_profiler`",
+			vim.log.levels.ERROR
+		)
+		return
+	end
+
 	local filepath = vim.api.nvim_buf_get_name(0)
 	filepath = paths.normalize_path(filepath)
 	local modules = files.discover_python_files()
