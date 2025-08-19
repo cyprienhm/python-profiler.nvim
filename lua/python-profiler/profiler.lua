@@ -1,3 +1,4 @@
+local kernprof_explorer = require("python-profiler.ui.kernprof_explorer")
 local pyinstrument_parser = require("python-profiler.parsers.pyinstrument")
 local kernprof_parser = require("python-profiler.parsers.kernprof")
 local files = require("python-profiler.utils.files")
@@ -114,6 +115,7 @@ function M.line_profile_file(args)
 					state.total_time.kernprof = result.total_time
 					annotations.annotate_all_open_buffers("kernprof", state.profiles, state.total_time, state.ns)
 					spinner.stop(spinner_id, "python-profiler: line_profiler profiling complete")
+					kernprof_explorer.show(state.profiles, state.total_time)
 				end)
 			end)
 		end)

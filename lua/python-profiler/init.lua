@@ -3,6 +3,7 @@ local highlights = require("python-profiler.ui.highlights")
 local annotations = require("python-profiler.ui.annotations")
 local state = require("python-profiler.state")
 local notifications = require("python-profiler.utils.notifications")
+local kernprof_explorer = require("python-profiler.ui.kernprof_explorer")
 
 local M = {}
 
@@ -46,6 +47,10 @@ function M.setup()
 		annotations.clear_annotations("pyinstrument", state.profiles, state.ns)
 		annotations.clear_annotations("kernprof", state.profiles, state.ns)
 		notifications.show("python-profiler: cleared annotations", vim.log.levels.INFO)
+	end, {})
+
+	vim.api.nvim_create_user_command("PythonProfileToggleKernprofExplorer", function()
+		kernprof_explorer.toggle()
 	end, {})
 end
 
