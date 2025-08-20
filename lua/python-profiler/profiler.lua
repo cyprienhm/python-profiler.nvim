@@ -70,7 +70,8 @@ function M.line_profile_file(args)
 
 	local filepath = vim.api.nvim_buf_get_name(0)
 	filepath = paths.normalize_path(filepath)
-	local modules = files.discover_python_files()
+	local modules = files.discover_python_modules()
+	modules = modules .. "," .. filepath
 
 	if modules == "" then
 		notifications.show("python-profiler: no Python modules found to profile", vim.log.levels.WARN)
