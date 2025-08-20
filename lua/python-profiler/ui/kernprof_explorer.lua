@@ -98,13 +98,26 @@ local function render_content()
 	local total_time_sum = global_state.total_time.kernprof or 0
 
 	table.insert(lines, "---")
+	table.insert(highlights, { group = "Comment", line = #lines - 1, col_start = 0, col_end = -1 })
+
 	table.insert(lines, "Profile Overview")
+	table.insert(highlights, { group = "Title", line = #lines - 1, col_start = 0, col_end = -1 })
+
 	table.insert(lines, string.format("Total time: %.3fs", total_time_sum))
+	table.insert(highlights, { group = "Number", line = #lines - 1, col_start = 12, col_end = -1 })
+
 	table.insert(lines, string.format("Files profiled: %d", total_files))
+	table.insert(highlights, { group = "Number", line = #lines - 1, col_start = 16, col_end = -1 })
+
 	table.insert(lines, "---")
+	table.insert(highlights, { group = "Comment", line = #lines - 1, col_start = 0, col_end = -1 })
+
 	table.insert(lines, "")
 	table.insert(lines, "---")
+	table.insert(highlights, { group = "Comment", line = #lines - 1, col_start = 0, col_end = -1 })
+
 	table.insert(lines, "File List")
+	table.insert(highlights, { group = "Title", line = #lines - 1, col_start = 0, col_end = -1 })
 
 	local bar_width = math.min(15, math.floor(content_width * 0.3))
 	local name_width = content_width - bar_width - 12
@@ -117,12 +130,26 @@ local function render_content()
 
 		table.insert(lines, line_text)
 
+		table.insert(
+			highlights,
+			{ group = "Directory", line = #lines - 1, col_start = 2, col_end = 2 + #fit_text(filename, name_width) }
+		)
+
+		local percent_start = #line_text - 6
+		local percent_group = file.percent > 50 and "ErrorMsg" or file.percent > 20 and "WarningMsg" or "String"
+		table.insert(highlights, { group = percent_group, line = #lines - 1, col_start = percent_start, col_end = -1 })
+
 		state.file_lines[#lines] = file.path
 	end
 	table.insert(lines, "---")
+	table.insert(highlights, { group = "Comment", line = #lines - 1, col_start = 0, col_end = -1 })
+
 	table.insert(lines, "")
 	table.insert(lines, "Keys: <CR> jump │ c clear")
+	table.insert(highlights, { group = "Special", line = #lines - 1, col_start = 0, col_end = -1 })
+
 	table.insert(lines, "      s sort │ q quit")
+	table.insert(highlights, { group = "Special", line = #lines - 1, col_start = 0, col_end = -1 })
 
 	return lines, highlights
 end
