@@ -100,7 +100,7 @@ function M.line_profile_file(args)
 				return
 			end
 
-			vim.system({ "python", "-m", "line_profiler", "-zrmt", lprof_file }, {
+			vim.system({ "python", "-m", "line_profiler", "-zmt", lprof_file }, {
 				stdout_buffered = true,
 				stderr_buffered = true,
 			}, function(res2)
